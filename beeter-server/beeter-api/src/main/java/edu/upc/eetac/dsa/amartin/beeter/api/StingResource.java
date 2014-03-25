@@ -11,6 +11,7 @@ import javax.sql.DataSource;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
@@ -25,6 +26,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.SecurityContext;
 
 import edu.upc.eetac.dsa.amartin.beeter.api.model.Sting;
 import edu.upc.eetac.dsa.amartin.beeter.api.model.StingCollection;
@@ -33,7 +35,17 @@ import edu.upc.eetac.dsa.amartin.beeter.api.model.StingCollection;
 public class StingResource {
 	private DataSource ds = DataSourceSPA.getInstance().getDataSource();
 
+	private void validateUser(String stingid) {
+		Sting currentSting = getStingFromDatabase(stingid);
+		if (!security.getUserPrincipal().getName()
+				.equals(currentSting.getUsername()))
+			throw new ForbiddenException(
+					"You are not allowed to modify this sting.");
+	}
 	
+	@Context
+	private SecurityContext security;
+
 	@GET
 	@Produces(MediaType.BEETER_API_STING_COLLECTION)
 	public StingCollection getStings(@QueryParam("length") int length,
@@ -145,6 +157,7 @@ public class StingResource {
 	@DELETE
 	@Path("/{stingid}")
 	public void deleteSting(@PathParam("stingid") String stingid) {
+		validateUser(stingid);
 		Connection conn = null;
 		try {
 			conn = ds.getConnection();
@@ -200,7 +213,8 @@ public class StingResource {
 			String sql = buildInsertSting();
 			stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
 
-			stmt.setString(1, sting.getUsername());
+			//stmt.setString(1, sting.getUsername());
+			stmt.setString(1, security.getUserPrincipal().getName());
 			stmt.setString(2, sting.getSubject());
 			stmt.setString(3, sting.getContent());
 			stmt.executeUpdate();
@@ -237,6 +251,7 @@ public class StingResource {
 	@Consumes(MediaType.BEETER_API_STING)
 	@Produces(MediaType.BEETER_API_STING)
 	public Sting updateSting(@PathParam("stingid") String stingid, Sting sting) {
+		validateUser(stingid);
 		validateUpdateSting(sting);
 		Connection conn = null;
 		try {
